@@ -16,9 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender-dev \
     libxext-dev \
     libglu-dev \
+    libgl1-mesa-dev \
     libglvnd-dev \
-    libegl1 \
-    libegl-dev \
+    libegl1-mesa-dev \
+    libgl1-mesa-dri \
     ca-certificates \
  && update-ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -41,14 +42,12 @@ RUN mkdir build && cd build \
     -DCMAKE_INSTALL_PREFIX=${PARAVIEW_INSTALL_PREFIX} \
     -DPARAVIEW_BUILD_QT_GUI=OFF \
     -DPARAVIEW_USE_MPI=ON \
-    -DPARAVIEW_USE_EGL=ON \
     -DVTK_OPENGL_HAS_EGL=ON \
-    -DPARAVIEW_USE_OSMESA=OFF \
     -DVTK_USE_X=OFF \
-    \
-    # (Optional) Enable VTK-m with CUDA if desired:
-    # -DPARAVIEW_USE_VTKM=ON \
-    # -DVTKm_ENABLE_CUDA=ON \
+    -DPARAVIEW_USE_OSMESA=OFF \
+    -DPARAVIEW_USE_VTKM=ON \
+    -DVTKm_ENABLE_CUDA=ON \
+    -DVTKm_CUDA_Architecture=native \
  && ninja \
  && ninja install
 
@@ -64,9 +63,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libglu1-mesa \
     libegl1 \
-    ca-certificates \
- && update-ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+    libgl1 \
+    libgl1-mesa-dri \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/paraview /opt/paraview
 
