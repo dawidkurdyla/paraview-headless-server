@@ -1,0 +1,77 @@
+# =========================
+# Stage 1: Build
+# =========================
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04 AS builder
+
+# Install development tools and libraries for EGL-based ParaView
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    wget \
+    python3 \
+    mpi-default-dev \
+    libxt-dev \
+    libxrender-dev \
+    libxext-dev \
+    libglu-dev \
+    libgl1-mesa-dev \
+    libglvnd-dev \
+    libegl1-mesa-dev \
+    libgl1-mesa-dri \
+    ca-certificates \
+ && update-ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV PARAVIEW_VERSION="v5.11.0"
+ENV PARAVIEW_URL="https://www.paraview.org/files/v5.11/ParaView-v5.11.0.tar.gz"
+ENV PARAVIEW_SRC="/opt/ParaView-v5.11.0"
+ENV PARAVIEW_INSTALL_PREFIX="/opt/paraview"
+
+WORKDIR /opt
+RUN wget -O ParaView.tar.gz "${PARAVIEW_URL}" \
+ && tar -xvf ParaView.tar.gz \
+ && rm ParaView.tar.gz
+
+# Build ParaView with EGL (GPU rendering)
+WORKDIR ${PARAVIEW_SRC}
+RUN mkdir build && cd build \
+ && cmake .. -GNinja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=${PARAVIEW_INSTALL_PREFIX} \
+    -DPARAVIEW_BUILD_QT_GUI=OFF \
+    -DPARAVIEW_USE_MPI=ON \
+    -DVTK_OPENGL_HAS_EGL=ON \
+    -DVTK_USE_X=OFF \
+    -DPARAVIEW_USE_OSMESA=OFF \
+    -DPARAVIEW_USE_VTKM=ON \
+    -DVTKm_ENABLE_CUDA=ON \
+    -DVTKm_CUDA_Architecture=native \
+ && ninja \
+ && ninja install
+
+# =========================
+# Stage 2: Runtime
+# =========================
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mpi-default-bin \
+    libxt6 \
+    libxrender1 \
+    libxext6 \
+    libglu1-mesa \
+    libegl1 \
+    libgl1 \
+    libgl1-mesa-dri \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/paraview /opt/paraview
+
+ENV PATH="/opt/paraview/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/paraview/lib:${LD_LIBRARY_PATH}"
+
+EXPOSE 11111
+
+CMD ["pvserver", "--server-port=11111", "--force-offscreen-rendering"]
